@@ -1,0 +1,1 @@
+# mailing-campaigns-service
