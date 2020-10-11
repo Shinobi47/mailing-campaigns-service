@@ -1,12 +1,13 @@
 package com.benayed.mailing.campaigns.controller;
 
+import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.NoSuchElementException;
 
+import javax.servlet.http.HttpServletResponse;
+
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -18,22 +19,29 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionHandler {
 
-	@ResponseBody
 	@ExceptionHandler(value = { IllegalArgumentException.class, TechnicalException.class})
-	protected ResponseEntity<?> handleBadRequest(RuntimeException e) {
-		return new ResponseEntity<String>(e.getMessage(), HttpStatus.BAD_REQUEST);
+	protected void handleBadRequest(RuntimeException e, HttpServletResponse response) throws IOException {
+		log.error("Exception raised : ", e); 
+		response.sendError(HttpStatus.BAD_REQUEST.value(), e.getMessage());
 	}
-	
+
 	@ExceptionHandler(value = { UncheckedIOException.class})
-	protected ResponseEntity<?> handleUncheckedIOException(RuntimeException e) {
-		log.error("File processing error !", e);
-		return new ResponseEntity<String>("Server error when processing a file, please contact your administrator", HttpStatus.INTERNAL_SERVER_ERROR);
+	protected void handleUncheckedIOException(RuntimeException e, HttpServletResponse response) throws IOException{
+		log.error("Exception raised : ", e); 
+		response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "File processing error : " + e.getMessage());
 
 	}
 
 	@ExceptionHandler(value = {NoSuchElementException.class})
-	protected ResponseEntity<?> handleNoSuchElementException(RuntimeException e) {
-		return new ResponseEntity<String>(e.getMessage(), HttpStatus.NOT_FOUND);
+	protected void handleNoSuchElementException(RuntimeException e, HttpServletResponse response) throws IOException {
+		log.error("Exception raised : ", e); 
+		response.sendError(HttpStatus.NOT_FOUND.value(), e.getMessage());
+	}
+	
+	
+	@ExceptionHandler(value = {Exception.class})
+	protected void handlGenericException(Exception e,  HttpServletResponse response) throws IOException {
+		log.error("Exception raised : ", e); 
+		response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Unexpected error happened, please contact your administrator");
 	}
 }
-	

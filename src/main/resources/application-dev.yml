@@ -1,5 +1,7 @@
 server:
-  port: 8087
+  port: 8077
+  error:
+    include-stacktrace: never
 
 spring:
   h2:
@@ -16,3 +18,6 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: none
+
+servers-service-url: http://localhost:8777/api/v1
+assets-service-url: http://localhost:8087/api/v1
