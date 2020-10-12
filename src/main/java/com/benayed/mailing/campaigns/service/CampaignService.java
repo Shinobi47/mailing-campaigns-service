@@ -6,6 +6,7 @@ import java.io.UnsupportedEncodingException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -51,10 +52,11 @@ public class CampaignService {
 	
 	public void processCampaign(CampaignDto campaignInfos) throws InterruptedException {
 		Assert.notNull(campaignInfos, "Campaigns infos cannot be null");
-		LocalDateTime startTime = LocalDateTime.now();
 		dataValidator.validateHeaders(campaignInfos.getCampaignHeaders());
+		Assert.notNull(campaignInfos.getCreative(), "creative cannot be null");
 		
 		log.info("Processing the campaign ...");
+		LocalDateTime startTime = LocalDateTime.now();
 		List<SMTPConfig> smtpServersConfig = campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds()).stream()
 				.map(dataMapper::toSmtpConfig).collect(Collectors.toList());
 		
@@ -75,8 +77,6 @@ public class CampaignService {
 	
 		// Setup mail server
 		properties.setProperty("mail.smtp.host", smtpConfig.getDomain());
-		properties.put("mail.smtp.from", campaignHeaders.getBounceAddr()); //You may want to set this to a generic address, different than the From: header, so you can process remote bounces. This done by setting mail.smtp.from property in JavaMail.
-																		   // bounce address = return path, reverse path, envelope from, envelope sender, MAIL FROM, 2821-FROM, return address,
 		properties.put("mail.smtp.starttls.enable", "true");
 		properties.put("mail.smtp.port", smtpConfig.getPort());
 		properties.put("mail.smtp.auth", "true");
@@ -87,6 +87,10 @@ public class CampaignService {
 															// unable to find valid certification path to requested
 															// target
 	
+		if(campaignHeaders.getBounceAddr() != null)
+			properties.put("mail.smtp.from", campaignHeaders.getBounceAddr()); //You may want to set this to a generic address, different than the From: header, so you can process remote bounces. This done by setting mail.smtp.from property in JavaMail.
+																			   // bounce address = return path, reverse path, envelope from, envelope sender, MAIL FROM, 2821-FROM, return address,
+		
 		Session session = Session.getInstance(properties, new javax.mail.Authenticator() {
 			protected PasswordAuthentication getPasswordAuthentication() {
 				return new PasswordAuthentication(smtpConfig.getUsername(), smtpConfig.getPassword());
@@ -97,10 +101,12 @@ public class CampaignService {
 			MimeMessage message = new MimeMessage(session);
 			message.setFrom(new InternetAddress(campaignHeaders.getFrom(), campaignHeaders.getFromName()));
 			message.setSubject(campaignHeaders.getSubject());
-			Address[] replyToAddrs = { new InternetAddress(campaignHeaders.getReplyTo()) };
-			message.setReplyTo(replyToAddrs);
+			if(campaignHeaders.getReplyTo() != null) {
+				Address[] replyToAddrs = {new InternetAddress(campaignHeaders.getReplyTo())};
+				message.setReplyTo(replyToAddrs);
+			}
 			message.setHeader("Received", campaignHeaders.getReceived());
-			for (Header header : campaignHeaders.getAdditionnalHeaders()) {
+			for (Header header : campaignHeaders.getAdditionnalHeaders() != null ? campaignHeaders.getAdditionnalHeaders() : new ArrayList<Header>()) {
 				message.addHeader(header.getName(), header.getValue());
 			}
 			message.setSentDate(new Date());
@@ -129,7 +135,7 @@ public class CampaignService {
 		Instant sendStart = Instant.now();
 		
 		log.info("Starting campaign with {} smtp servers and {} data items", smtpServersConfig.size(), dataItems.size());
-		log.info("smtp is gonna rotate after every {} send. {} emails are going to be sent every {} mins", mailsToSendBeforeIpRotate, batchSize, intervalBetweenBatchesInSec);
+		log.info("smtp is gonna rotate every {} e-mail sent. {} emails are going to be sent every {} seconds", mailsToSendBeforeIpRotate, batchSize, intervalBetweenBatchesInSec);
 		for(int index = 1; index <= data.size(); index++) {
 			
 			if(shouldRotateDomain(mailsToSendBeforeIpRotate, index)) {

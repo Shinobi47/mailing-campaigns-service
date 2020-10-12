@@ -100,11 +100,23 @@ public class DataValidatorTest {
 	}
 	
 	@Test
-	public void should_not_throw_exception(){
+	public void should_not_throw_exception_when_headers_are_valid(){
 		//Arrange
 		Header invalidHeader = new Header("valid", "valid");
 		CampaignHeaders campaignHeaders = CampaignHeaders.builder()
 				.additionnalHeaders(Arrays.asList(invalidHeader)).build();
+		//Act
+		dataValidator.validateHeaders(campaignHeaders);
+
+		//Assert
+		//=> exception not thrown
+	}
+	
+	@Test
+	public void should_not_throw_exception_when_additionnal_headers_are_null(){
+		//Arrange
+		CampaignHeaders campaignHeaders = CampaignHeaders.builder()
+				.additionnalHeaders(null).build();
 		//Act
 		dataValidator.validateHeaders(campaignHeaders);
 

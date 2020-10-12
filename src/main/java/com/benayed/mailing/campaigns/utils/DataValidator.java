@@ -18,18 +18,21 @@ public class DataValidator {
 		if(headers == null)
 			throw new IllegalArgumentException("campaign headers must not be null");
 		
-		if(doesHeadersContainNull(headers))
+		if(headers.getAdditionnalHeaders() == null)
+			return;
+					
+		if(doesHeadersContainNullAdditionnalHeader(headers))
 			throw new IllegalArgumentException("NULL detected in your additionnal headers ! (either the value, the name or the header itself)");
 
-		if(anyHeaderContainsIllegalCharacter(headers))
+		if(anyAdditionnalHeaderContainsIllegalCharacter(headers))
 			throw new IllegalArgumentException("your additionnal headers contain Illegal characters, cannot send campaign");
 	}
 
-	private boolean doesHeadersContainNull(CampaignHeaders headers) {
+	private boolean doesHeadersContainNullAdditionnalHeader(CampaignHeaders headers) {
 		return headers.getAdditionnalHeaders().stream().anyMatch(header -> header == null || header.getName() == null || header.getValue() == null);
 	}
 
-	private boolean anyHeaderContainsIllegalCharacter(CampaignHeaders headers) {
+	private boolean anyAdditionnalHeaderContainsIllegalCharacter(CampaignHeaders headers) {
 		return headers.getAdditionnalHeaders().stream()
 		.filter(Objects::nonNull)
 		.anyMatch(this::headerContainsAnIllegalCharacter);

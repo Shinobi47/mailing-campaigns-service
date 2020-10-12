@@ -1,21 +1,22 @@
 package com.benayed.mailing.campaigns.test;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Stream;
 
 import javax.mail.Header;
 import javax.mail.Message;
 import javax.mail.MessagingException;
-import javax.mail.internet.MimeMessage;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +25,8 @@ import com.benayed.mailing.campaigns.dto.CampaignDto;
 import com.benayed.mailing.campaigns.dto.CampaignHeaders;
 import com.benayed.mailing.campaigns.dto.DataItemDto;
 import com.benayed.mailing.campaigns.dto.MTADto;
+import com.benayed.mailing.campaigns.entity.CampaignEntity;
+import com.benayed.mailing.campaigns.enums.CampaignStatus;
 import com.benayed.mailing.campaigns.repository.CampaignRepository;
 import com.benayed.mailing.campaigns.service.CampaignResourcesRepository;
 import com.benayed.mailing.campaigns.service.CampaignService;
@@ -48,8 +51,10 @@ public class CampaignServiceTest {
 	
 	private DataValidator dataValidator = new DataValidator();
 	
-//	private GreenMailRule greenMail = new GreenMailRule(ServerSetupTest.SMTP);
 	private GreenMail greenMail;
+	
+	@Captor
+	private ArgumentCaptor<CampaignEntity> campaignEntityCaptor;
 	
 	@BeforeEach
 	private void init() {
@@ -116,20 +121,12 @@ public class CampaignServiceTest {
 		validateReceivedHeaders(bounceAddr, from, fromName, subject, replyTo, received, additionnalHeader, dataItems.get(0).getProspectEmail(), receivedHeaders);
 		Assertions.assertThat(GreenMailUtil.getBody(messages[0])).isEqualTo(creative);
 				
-	}	
+	}
 	
 	
 	@Test
-	public void should_send_one_maila() throws InterruptedException, IOException, MessagingException {
-		//Arrange
-		String bounceAddr = "BounceAddr@gmail.com";
-		String from = "from@gmail.com";
-		String fromName = "fromName";
-		String subject = "Subject1";
-		String replyTo = "ReplyTo@gmail.com";
-		String received = "received";
-		Header additionnalHeader = new Header("headerName", "headerValue");
-		
+	public void should_send_3_batches_correctly_and_wait_between_batches() throws InterruptedException, IOException, MessagingException {
+		//Arrange	
 		String creative = "This is a mail creative";
 
 		int batchSize = 3;
@@ -140,7 +137,7 @@ public class CampaignServiceTest {
 				.batchSize(batchSize)
 				.intervalBetweenBatchesInSec(intervalBetweenBatchesInSec)
 				.mailsToSendBeforeIpRotate(mailsToSendBeforeIpRotate)
-				.campaignHeaders(buildCampaignHeaders(bounceAddr, from, fromName, subject, replyTo, received, additionnalHeader))
+				.campaignHeaders(CampaignHeaders.builder().build())
 				.creative(creative)
 				.mtasIds(Arrays.asList(1L,2L))
 				.groupsIds(Arrays.asList(4L,5L))
@@ -168,18 +165,74 @@ public class CampaignServiceTest {
 		Message[] messages = greenMail.getReceivedMessages();
 		
 		Assertions.assertThat(messages).hasSize(8);
-		for(int i = 0; i < messages.length; i++) {
-			String recipientEmail = dataItems.get(i).getProspectEmail();
-			String receivedHeaders = GreenMailUtil.getHeaders(messages[i]);
-			validateReceivedHeaders(bounceAddr, from, fromName, subject, replyTo, received, additionnalHeader, recipientEmail, receivedHeaders);
-			Assertions.assertThat(GreenMailUtil.getBody(messages[i])).isEqualTo(creative);
-		}
-		Mockito.verify(campaignRepository, Mockito.times(1)).save(Mockito.any());
-		
-		test batches ? send time ?
-		
+		Mockito.verify(campaignRepository, Mockito.times(1)).save(campaignEntityCaptor.capture());
+		CampaignEntity persistedCampaign = campaignEntityCaptor.getValue();
+		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.TERMINATED);
+		Assertions.assertThat(Duration.between(persistedCampaign.getStartTime(), persistedCampaign.getEndTime()).compareTo(Duration.ofSeconds(2*4))).isPositive(); // campaign execution lasts longer than  8 (2*4) seconds.
+																																								   // with batch size 3 and 8 emails and interval between batches 4 seconds, campaign should wait twice (3 mails sent then wait 4s then 3 sent then wait 4s then 2 sent). 
 	}
 
+
+	@Test
+	public void should_rotate_ip_twice_between_the_two_available_servers() throws InterruptedException, IOException, MessagingException {
+		//Arrange
+		String creative = "This is a mail creative";
+
+		int batchSize = 100;
+		int intervalBetweenBatchesInSec = 4;
+		int mailsToSendBeforeIpRotate = 2;
+		
+		CampaignDto campaignInfos = CampaignDto.builder()
+				.batchSize(batchSize)
+				.intervalBetweenBatchesInSec(intervalBetweenBatchesInSec)
+				.mailsToSendBeforeIpRotate(mailsToSendBeforeIpRotate)
+				.campaignHeaders(CampaignHeaders.builder().build())
+				.creative(creative)
+				.mtasIds(Arrays.asList(1L,2L))
+				.groupsIds(Arrays.asList(4L,5L))
+				.suppressionId(1L)
+				.offset(0)
+				.limit(11)
+				.isDataFiltered(true).build();
+		
+		MTADto smtpServer1 = buildMTADto("mtaName1", "localHost", "127.0.0.1", "7000", "username", "password");
+		MTADto smtpServer2 = buildMTADto("mtaName2", "localHost", "127.0.0.1", "6000", "username", "password");
+		
+		List<DataItemDto> dataItems = buildDummyDataListHavingSize(5);
+		
+		ServerSetup serverSetup = new ServerSetup(Integer.parseInt(smtpServer1.getPort()), smtpServer1.getIp(), ServerSetup.PROTOCOL_SMTP);
+		greenMail = new GreenMail(serverSetup);
+		greenMail.setUser(smtpServer1.getUsername(), smtpServer1.getPassword());
+		greenMail.start();
+		
+		ServerSetup serverSetup2 = new ServerSetup(Integer.parseInt(smtpServer2.getPort()), smtpServer2.getIp(), ServerSetup.PROTOCOL_SMTP);
+		GreenMail greenMailRotation = new GreenMail(serverSetup2);
+		greenMailRotation.setUser(smtpServer2.getUsername(), smtpServer2.getPassword());
+		greenMailRotation.start();
+		
+
+		Mockito.when(campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds())).thenReturn(Arrays.asList(smtpServer1, smtpServer2));
+		Mockito.when(campaignResourcesRepository.fetchData(campaignInfos.getGroupsIds(), campaignInfos.getSuppressionId(), campaignInfos.getOffset(), campaignInfos.getLimit(), campaignInfos.getIsDataFiltered())).thenReturn(dataItems);
+		
+		//Act
+		campaignService.processCampaign(campaignInfos);
+
+		//Assert
+		Assertions.assertThat(greenMail.getReceivedMessages()).hasSize(3);
+		Assertions.assertThat(greenMailRotation.getReceivedMessages()).hasSize(2);
+		Mockito.verify(campaignRepository, Mockito.times(1)).save(campaignEntityCaptor.capture());
+		CampaignEntity persistedCampaign = campaignEntityCaptor.getValue();
+		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.TERMINATED);
+		
+		greenMailRotation.stop();
+	}
+	
+	should we log/persist something if a campaign fails ?
+	what do we need to test more?
+	add testcase for null creative(empty too)
+	chof ila kain chi maniere plus elegante pour refactorer dik sendEmail
+	
+	
 	private void validateReceivedHeaders(String bounceAddr, String from, String fromName, String subject,
 			String replyTo, String received, Header additionnalHeader,	String recipientEmail, String receivedHeaders) {
 		Assertions.assertThat(receivedHeaders).contains("Return-Path: <" + bounceAddr + ">");
