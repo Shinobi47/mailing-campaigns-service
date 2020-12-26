@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import javax.mail.Header;
 import javax.mail.Message;
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -27,6 +30,7 @@ import com.benayed.mailing.campaigns.dto.DataItemDto;
 import com.benayed.mailing.campaigns.dto.MTADto;
 import com.benayed.mailing.campaigns.entity.CampaignEntity;
 import com.benayed.mailing.campaigns.enums.CampaignStatus;
+import com.benayed.mailing.campaigns.exception.TechnicalException;
 import com.benayed.mailing.campaigns.repository.CampaignRepository;
 import com.benayed.mailing.campaigns.service.CampaignResourcesRepository;
 import com.benayed.mailing.campaigns.service.CampaignService;
@@ -64,7 +68,7 @@ public class CampaignServiceTest {
 	
 	@AfterEach
 	private void shut() {
-		greenMail.stop();
+		Optional.ofNullable(greenMail).ifPresent(GreenMail::stop);
 	}
 	
 	@Test
@@ -227,12 +231,53 @@ public class CampaignServiceTest {
 		greenMailRotation.stop();
 	}
 	
-	should we log/persist something if a campaign fails ?
-	what do we need to test more?
-	add testcase for null creative(empty too)
-	chof ila kain chi maniere plus elegante pour refactorer dik sendEmail
+	@Test
+	public void should_persist_campaign_with_failed_status_when_processing_campaign_fails() throws InterruptedException, IOException, MessagingException {
+		//Arrange
+		CampaignDto campaignInfos = CampaignDto.builder().campaignHeaders(CampaignHeaders.builder().build()).creative("dummy").build();
+		Mockito.when(campaignResourcesRepository.fetchServersDetails(Mockito.any())).thenThrow(new TechnicalException()); //could be any exception we are testing the catch block
+
+		//Act
+		org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> 
+		campaignService.processCampaign(campaignInfos));
+
+		//Assert
+		Mockito.verify(campaignRepository, Mockito.times(1)).save(campaignEntityCaptor.capture());
+		CampaignEntity persistedCampaign = campaignEntityCaptor.getValue();
+		Assertions.assertThat(persistedCampaign.getEndTime()).isNotNull();
+		Assertions.assertThat(persistedCampaign.getStartTime()).isNotNull();
+		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.FAILED);
+	}
 	
+	@ParameterizedTest
+	@NullAndEmptySource
+	public void should_throw_exception_when_creative_is_null_or_empty(String creative) throws InterruptedException, IOException, MessagingException {
+		//Arrange
+		CampaignDto campaignInfos = CampaignDto.builder().campaignHeaders(CampaignHeaders.builder().build()).creative(creative).build();
+
+		//Act
+		org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> 
+		campaignService.processCampaign(campaignInfos));
+		
+		//Assert
+		//=> Exception raised
+
+	}
 	
+	@Test
+	public void should_throw_exception_when_campaign_info_is_null(String creative) throws InterruptedException, IOException, MessagingException {
+		//Arrange
+		CampaignDto campaignInfos = null;
+		//Act
+		org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> 
+		campaignService.processCampaign(campaignInfos));
+		
+		//Assert
+		//=> Exception raised
+
+	}
+	
+
 	private void validateReceivedHeaders(String bounceAddr, String from, String fromName, String subject,
 			String replyTo, String received, Header additionnalHeader,	String recipientEmail, String receivedHeaders) {
 		Assertions.assertThat(receivedHeaders).contains("Return-Path: <" + bounceAddr + ">");

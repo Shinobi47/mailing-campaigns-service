@@ -1,6 +1,7 @@
 package com.benayed.mailing.campaigns.service;
 
 import static com.benayed.mailing.campaigns.enums.CampaignStatus.TERMINATED;
+import static com.benayed.mailing.campaigns.enums.CampaignStatus.FAILED;
 
 import java.io.UnsupportedEncodingException;
 import java.time.Duration;
@@ -23,6 +24,7 @@ import javax.mail.Transport;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
@@ -51,24 +53,34 @@ public class CampaignService {
 	private CampaignRepository campaignRepository;
 	
 	public void processCampaign(CampaignDto campaignInfos) throws InterruptedException {
+		
 		Assert.notNull(campaignInfos, "Campaigns infos cannot be null");
 		dataValidator.validateHeaders(campaignInfos.getCampaignHeaders());
-		Assert.notNull(campaignInfos.getCreative(), "creative cannot be null");
+		Assert.isTrue(!StringUtils.isBlank(campaignInfos.getCreative()), "creative cannot be null or empty");
 		
-		log.info("Processing the campaign ...");
-		LocalDateTime startTime = LocalDateTime.now();
-		List<SMTPConfig> smtpServersConfig = campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds()).stream()
-				.map(dataMapper::toSmtpConfig).collect(Collectors.toList());
-		
-		List<DataItemDto> dataItems = campaignResourcesRepository.fetchData(campaignInfos.getGroupsIds(), campaignInfos.getSuppressionId(), campaignInfos.getOffset(), campaignInfos.getLimit(), campaignInfos.getIsDataFiltered());
+		try {
+			log.info("Processing the campaign ..."); 
+			
+			LocalDateTime startTime = LocalDateTime.now();
+			campaignInfos.setStartTime(startTime);
+			List<SMTPConfig> smtpServersConfig = campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds()).stream()
+					.map(dataMapper::toSmtpConfig).collect(Collectors.toList());
+			
+			List<DataItemDto> dataItems = campaignResourcesRepository.fetchData(campaignInfos.getGroupsIds(), campaignInfos.getSuppressionId(), campaignInfos.getOffset(), campaignInfos.getLimit(), campaignInfos.getIsDataFiltered());
 
-		sendCampaign(campaignInfos.getBatchSize(), campaignInfos.getIntervalBetweenBatchesInSec(), campaignInfos.getMailsToSendBeforeIpRotate(), dataItems, smtpServersConfig, campaignInfos.getCampaignHeaders(), campaignInfos.getCreative());
-		
-		campaignInfos.setStartTime(startTime);
-		campaignInfos.setEndTime(LocalDateTime.now());
-		
-		campaignRepository.save(dataMapper.toEntity(campaignInfos, TERMINATED));
-		log.info("Campaign Terminated successfully !");
+			sendCampaign(campaignInfos.getBatchSize(), campaignInfos.getIntervalBetweenBatchesInSec(), campaignInfos.getMailsToSendBeforeIpRotate(), dataItems, smtpServersConfig, campaignInfos.getCampaignHeaders(), campaignInfos.getCreative());
+			
+			campaignInfos.setEndTime(LocalDateTime.now());
+			
+			campaignRepository.save(dataMapper.toEntity(campaignInfos, TERMINATED));
+			log.info("Campaign Terminated successfully !");
+		}catch(Exception e) {
+			log.error("Error while processing the campaign");
+			campaignInfos.setEndTime(LocalDateTime.now());
+			campaignRepository.save(dataMapper.toEntity(campaignInfos, FAILED));
+			throw e;
+		}
+
 	}
 
 	private void sendEmail(SMTPConfig smtpConfig, CampaignHeaders campaignHeaders, String body, String recipient) {
