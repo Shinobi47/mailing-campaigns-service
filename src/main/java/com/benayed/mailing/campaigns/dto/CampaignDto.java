@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @Data @AllArgsConstructor @NoArgsConstructor @Builder
 public class CampaignDto {
 	
+	private Long id;
 	private Integer batchSize;
 	private Integer intervalBetweenBatchesInSec;
 	private Integer mailsToSendBeforeIpRotate;

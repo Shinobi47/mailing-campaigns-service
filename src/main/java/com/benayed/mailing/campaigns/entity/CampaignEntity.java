@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
@@ -83,6 +85,7 @@ public class CampaignEntity {
 	private Boolean isDataFiltered;
 
 	@Column(name = "CMP_STATUS")
+    @Enumerated(EnumType.STRING)
 	private CampaignStatus status;
 	
 	@Column(name = "CMP_START_TIME")

@@ -26,6 +26,7 @@ public class DataMapper {
 	
 	public CampaignEntity toEntity(CampaignDto dto, CampaignStatus status) {
 		return dto == null ? null : CampaignEntity.builder()
+		.id(dto.getId())
 		.batchSize(dto.getBatchSize())
 		.intervalBetweenBatchesInSec(dto.getIntervalBetweenBatchesInSec())
 		.mailsToSendBeforeIpRotate(dto.getMailsToSendBeforeIpRotate())

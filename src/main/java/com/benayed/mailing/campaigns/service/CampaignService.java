@@ -2,6 +2,7 @@ package com.benayed.mailing.campaigns.service;
 
 import static com.benayed.mailing.campaigns.enums.CampaignStatus.TERMINATED;
 import static com.benayed.mailing.campaigns.enums.CampaignStatus.FAILED;
+import static com.benayed.mailing.campaigns.enums.CampaignStatus.PENDING;
 
 import java.io.UnsupportedEncodingException;
 import java.time.Duration;
@@ -52,6 +53,7 @@ public class CampaignService {
 	private DataValidator dataValidator;
 	private CampaignRepository campaignRepository;
 	
+
 	public void processCampaign(CampaignDto campaignInfos) throws InterruptedException {
 		
 		Assert.notNull(campaignInfos, "Campaigns infos cannot be null");
@@ -63,6 +65,8 @@ public class CampaignService {
 			
 			LocalDateTime startTime = LocalDateTime.now();
 			campaignInfos.setStartTime(startTime);
+			Long campaignId = campaignRepository.save(dataMapper.toEntity(campaignInfos, PENDING)).getId();
+			campaignInfos.setId(campaignId);
 			List<SMTPConfig> smtpServersConfig = campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds()).stream()
 					.map(dataMapper::toSmtpConfig).collect(Collectors.toList());
 			
@@ -71,9 +75,10 @@ public class CampaignService {
 			sendCampaign(campaignInfos.getBatchSize(), campaignInfos.getIntervalBetweenBatchesInSec(), campaignInfos.getMailsToSendBeforeIpRotate(), dataItems, smtpServersConfig, campaignInfos.getCampaignHeaders(), campaignInfos.getCreative());
 			
 			campaignInfos.setEndTime(LocalDateTime.now());
-			
+
 			campaignRepository.save(dataMapper.toEntity(campaignInfos, TERMINATED));
 			log.info("Campaign Terminated successfully !");
+			
 		}catch(Exception e) {
 			log.error("Error while processing the campaign");
 			campaignInfos.setEndTime(LocalDateTime.now());

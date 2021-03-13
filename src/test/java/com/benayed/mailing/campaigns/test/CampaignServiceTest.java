@@ -124,7 +124,7 @@ public class CampaignServiceTest {
 		String receivedHeaders = GreenMailUtil.getHeaders(messages[0]);
 		validateReceivedHeaders(bounceAddr, from, fromName, subject, replyTo, received, additionnalHeader, dataItems.get(0).getProspectEmail(), receivedHeaders);
 		Assertions.assertThat(GreenMailUtil.getBody(messages[0])).isEqualTo(creative);
-				
+
 	}
 	
 	
@@ -169,7 +169,7 @@ public class CampaignServiceTest {
 		Message[] messages = greenMail.getReceivedMessages();
 		
 		Assertions.assertThat(messages).hasSize(8);
-		Mockito.verify(campaignRepository, Mockito.times(1)).save(campaignEntityCaptor.capture());
+		Mockito.verify(campaignRepository, Mockito.times(2)).save(campaignEntityCaptor.capture());
 		CampaignEntity persistedCampaign = campaignEntityCaptor.getValue();
 		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.TERMINATED);
 		Assertions.assertThat(Duration.between(persistedCampaign.getStartTime(), persistedCampaign.getEndTime()).compareTo(Duration.ofSeconds(2*4))).isPositive(); // campaign execution lasts longer than  8 (2*4) seconds.
@@ -224,7 +224,7 @@ public class CampaignServiceTest {
 		//Assert
 		Assertions.assertThat(greenMail.getReceivedMessages()).hasSize(3);
 		Assertions.assertThat(greenMailRotation.getReceivedMessages()).hasSize(2);
-		Mockito.verify(campaignRepository, Mockito.times(1)).save(campaignEntityCaptor.capture());
+		Mockito.verify(campaignRepository, Mockito.times(2)).save(campaignEntityCaptor.capture());
 		CampaignEntity persistedCampaign = campaignEntityCaptor.getValue();
 		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.TERMINATED);
 		
@@ -242,7 +242,7 @@ public class CampaignServiceTest {
 		campaignService.processCampaign(campaignInfos));
 
 		//Assert
-		Mockito.verify(campaignRepository, Mockito.times(1)).save(campaignEntityCaptor.capture());
+		Mockito.verify(campaignRepository, Mockito.times(2)).save(campaignEntityCaptor.capture());
 		CampaignEntity persistedCampaign = campaignEntityCaptor.getValue();
 		Assertions.assertThat(persistedCampaign.getEndTime()).isNotNull();
 		Assertions.assertThat(persistedCampaign.getStartTime()).isNotNull();
@@ -264,7 +264,8 @@ public class CampaignServiceTest {
 
 	}
 	
-	@Test
+	@ParameterizedTest
+	@NullAndEmptySource
 	public void should_throw_exception_when_campaign_info_is_null(String creative) throws InterruptedException, IOException, MessagingException {
 		//Arrange
 		CampaignDto campaignInfos = null;
