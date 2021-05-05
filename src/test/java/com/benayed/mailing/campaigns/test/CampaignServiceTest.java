@@ -6,7 +6,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
+import javax.mail.Address;
 import javax.mail.Header;
 import javax.mail.Message;
 import javax.mail.MessagingException;
@@ -112,7 +114,8 @@ public class CampaignServiceTest {
 
 		Mockito.when(campaignResourcesRepository.fetchServersDetails(Arrays.asList(1L,2L))).thenReturn(Arrays.asList(smtpServer));
 		Mockito.when(campaignResourcesRepository.fetchData(campaignInfos.getGroupsIds(), campaignInfos.getSuppressionId(), campaignInfos.getOffset(), campaignInfos.getLimit(), campaignInfos.getIsDataFiltered())).thenReturn(dataItems);
-		
+		Mockito.when(campaignRepository.save(Mockito.any())).thenReturn(new CampaignEntity());
+
 		//Act
 		campaignService.processCampaign(campaignInfos);
 
@@ -134,13 +137,11 @@ public class CampaignServiceTest {
 		String creative = "This is a mail creative";
 
 		int batchSize = 3;
-		int intervalBetweenBatchesInSec = 4;
-		int mailsToSendBeforeIpRotate = 100;
+		int timeToWaitBetweenBatchesInSec = 4;
 		
 		CampaignDto campaignInfos = CampaignDto.builder()
 				.batchSize(batchSize)
-				.intervalBetweenBatchesInSec(intervalBetweenBatchesInSec)
-				.mailsToSendBeforeIpRotate(mailsToSendBeforeIpRotate)
+				.intervalBetweenBatchesInSec(timeToWaitBetweenBatchesInSec)
 				.campaignHeaders(CampaignHeaders.builder().build())
 				.creative(creative)
 				.mtasIds(Arrays.asList(1L,2L))
@@ -161,6 +162,7 @@ public class CampaignServiceTest {
 
 		Mockito.when(campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds())).thenReturn(Arrays.asList(smtpServer));
 		Mockito.when(campaignResourcesRepository.fetchData(campaignInfos.getGroupsIds(), campaignInfos.getSuppressionId(), campaignInfos.getOffset(), campaignInfos.getLimit(), campaignInfos.getIsDataFiltered())).thenReturn(dataItems);
+		Mockito.when(campaignRepository.save(Mockito.any())).thenReturn(new CampaignEntity());
 		
 		//Act
 		campaignService.processCampaign(campaignInfos);
@@ -175,6 +177,48 @@ public class CampaignServiceTest {
 		Assertions.assertThat(Duration.between(persistedCampaign.getStartTime(), persistedCampaign.getEndTime()).compareTo(Duration.ofSeconds(2*4))).isPositive(); // campaign execution lasts longer than  8 (2*4) seconds.
 																																								   // with batch size 3 and 8 emails and interval between batches 4 seconds, campaign should wait twice (3 mails sent then wait 4s then 3 sent then wait 4s then 2 sent). 
 	}
+	
+	@Test
+	public void should_send_test_mails_after_a_number_of_mails_sent() throws InterruptedException, IOException, MessagingException {
+		//Arrange	
+
+		Integer numberOfMailsSentBeforeSendingTestEmails = 3;
+		String testMailOne = "test@mail.one";
+		String testMailTwo = "test@mail.two";
+		
+		//kmel had test w zid if only data fiha qel mn test mails, mai sendi ta test mail
+		
+		CampaignDto campaignInfos = CampaignDto.builder()
+				.testAfter(numberOfMailsSentBeforeSendingTestEmails)
+				.testMails(Arrays.asList(testMailOne, testMailTwo))
+				.campaignHeaders(CampaignHeaders.builder().build())
+				.creative("This is a mail creative")
+				.mtasIds(Arrays.asList(1L,2L))
+				.groupsIds(Arrays.asList(4L,5L)).build();
+		
+		MTADto smtpServer = buildMTADto("mtaName", "localHost", "127.0.0.1", "7000", "username", "password");
+		List<DataItemDto> dataItems = buildDummyDataListHavingSize(5);
+		
+		ServerSetup serverSetup = new ServerSetup(Integer.parseInt(smtpServer.getPort()), smtpServer.getIp(), ServerSetup.PROTOCOL_SMTP);
+		greenMail = new GreenMail(serverSetup);
+		greenMail.setUser(smtpServer.getUsername(), smtpServer.getPassword());
+		greenMail.start();
+
+		Mockito.when(campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds())).thenReturn(Arrays.asList(smtpServer));
+		Mockito.when(campaignResourcesRepository.fetchData(campaignInfos.getGroupsIds(), campaignInfos.getSuppressionId(), campaignInfos.getOffset(), campaignInfos.getLimit(), campaignInfos.getIsDataFiltered())).thenReturn(dataItems);
+		Mockito.when(campaignRepository.save(Mockito.any())).thenReturn(new CampaignEntity());
+		
+		//Act
+		campaignService.processCampaign(campaignInfos);
+
+		//Assert
+		Message[] messages = greenMail.getReceivedMessages();
+		Assertions.assertThat(messages).hasSize(7); // 3 mails + 2 tests + 2 mails = 5 mails + 2 tests = 7
+		
+		List<String> recipients = getAllRecipientsFromMessages(messages);
+		Assertions.assertThat(recipients).contains(testMailOne, testMailTwo);
+		
+	}
 
 
 	@Test
@@ -182,13 +226,9 @@ public class CampaignServiceTest {
 		//Arrange
 		String creative = "This is a mail creative";
 
-		int batchSize = 100;
-		int intervalBetweenBatchesInSec = 4;
 		int mailsToSendBeforeIpRotate = 2;
 		
 		CampaignDto campaignInfos = CampaignDto.builder()
-				.batchSize(batchSize)
-				.intervalBetweenBatchesInSec(intervalBetweenBatchesInSec)
 				.mailsToSendBeforeIpRotate(mailsToSendBeforeIpRotate)
 				.campaignHeaders(CampaignHeaders.builder().build())
 				.creative(creative)
@@ -204,8 +244,8 @@ public class CampaignServiceTest {
 		
 		List<DataItemDto> dataItems = buildDummyDataListHavingSize(5);
 		
-		ServerSetup serverSetup = new ServerSetup(Integer.parseInt(smtpServer1.getPort()), smtpServer1.getIp(), ServerSetup.PROTOCOL_SMTP);
-		greenMail = new GreenMail(serverSetup);
+		ServerSetup serverSetup1 = new ServerSetup(Integer.parseInt(smtpServer1.getPort()), smtpServer1.getIp(), ServerSetup.PROTOCOL_SMTP);
+		greenMail = new GreenMail(serverSetup1);
 		greenMail.setUser(smtpServer1.getUsername(), smtpServer1.getPassword());
 		greenMail.start();
 		
@@ -217,7 +257,8 @@ public class CampaignServiceTest {
 
 		Mockito.when(campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds())).thenReturn(Arrays.asList(smtpServer1, smtpServer2));
 		Mockito.when(campaignResourcesRepository.fetchData(campaignInfos.getGroupsIds(), campaignInfos.getSuppressionId(), campaignInfos.getOffset(), campaignInfos.getLimit(), campaignInfos.getIsDataFiltered())).thenReturn(dataItems);
-		
+		Mockito.when(campaignRepository.save(Mockito.any())).thenReturn(new CampaignEntity());
+
 		//Act
 		campaignService.processCampaign(campaignInfos);
 
@@ -236,6 +277,7 @@ public class CampaignServiceTest {
 		//Arrange
 		CampaignDto campaignInfos = CampaignDto.builder().campaignHeaders(CampaignHeaders.builder().build()).creative("dummy").build();
 		Mockito.when(campaignResourcesRepository.fetchServersDetails(Mockito.any())).thenThrow(new TechnicalException()); //could be any exception we are testing the catch block
+		Mockito.when(campaignRepository.save(Mockito.any())).thenReturn(new CampaignEntity());
 
 		//Act
 		org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> 
@@ -322,5 +364,14 @@ public class CampaignServiceTest {
 				.isp("GMAIL").build());
 		}
 		return dummyData;
+	}
+	
+
+	private List<String> getAllRecipientsFromMessages(Message[] messages) throws MessagingException {
+		List<String> recipients = new ArrayList<String>();
+		for(Message message : messages) {
+			recipients.addAll(Arrays.asList(message.getAllRecipients()).stream().map(Address::toString).collect(Collectors.toList()));
+		}
+		return recipients;
 	}
 }

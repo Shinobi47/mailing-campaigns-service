@@ -22,6 +22,8 @@ public class CampaignDto {
 	private Long suppressionId;
 	private Integer offset;
 	private Integer limit;
+	private Integer testAfter; // new
+	private List<String> testMails;// new
 	private Boolean isDataFiltered;
 	private LocalDateTime startTime;
 	private LocalDateTime endTime;

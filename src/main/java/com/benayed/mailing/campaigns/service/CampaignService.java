@@ -2,7 +2,7 @@ package com.benayed.mailing.campaigns.service;
 
 import static com.benayed.mailing.campaigns.enums.CampaignStatus.TERMINATED;
 import static com.benayed.mailing.campaigns.enums.CampaignStatus.FAILED;
-import static com.benayed.mailing.campaigns.enums.CampaignStatus.PENDING;
+import static com.benayed.mailing.campaigns.enums.CampaignStatus.SENDING;
 
 import java.io.UnsupportedEncodingException;
 import java.time.Duration;
@@ -65,14 +65,14 @@ public class CampaignService {
 			
 			LocalDateTime startTime = LocalDateTime.now();
 			campaignInfos.setStartTime(startTime);
-			Long campaignId = campaignRepository.save(dataMapper.toEntity(campaignInfos, PENDING)).getId();
+			Long campaignId = campaignRepository.save(dataMapper.toEntity(campaignInfos, SENDING)).getId();
 			campaignInfos.setId(campaignId);
 			List<SMTPConfig> smtpServersConfig = campaignResourcesRepository.fetchServersDetails(campaignInfos.getMtasIds()).stream()
 					.map(dataMapper::toSmtpConfig).collect(Collectors.toList());
 			
 			List<DataItemDto> dataItems = campaignResourcesRepository.fetchData(campaignInfos.getGroupsIds(), campaignInfos.getSuppressionId(), campaignInfos.getOffset(), campaignInfos.getLimit(), campaignInfos.getIsDataFiltered());
 
-			sendCampaign(campaignInfos.getBatchSize(), campaignInfos.getIntervalBetweenBatchesInSec(), campaignInfos.getMailsToSendBeforeIpRotate(), dataItems, smtpServersConfig, campaignInfos.getCampaignHeaders(), campaignInfos.getCreative());
+			sendCampaign(campaignInfos.getBatchSize(), campaignInfos.getIntervalBetweenBatchesInSec(), campaignInfos.getMailsToSendBeforeIpRotate(), dataItems, smtpServersConfig, campaignInfos.getCampaignHeaders(), campaignInfos.getCreative(), campaignInfos.getTestAfter(), campaignInfos.getTestMails());
 			
 			campaignInfos.setEndTime(LocalDateTime.now());
 
@@ -140,8 +140,8 @@ public class CampaignService {
 		
 	}
 
-	private synchronized void sendCampaign(Integer batchSize, Integer intervalBetweenBatchesInSec, Integer mailsToSendBeforeIpRotate, List<DataItemDto> dataItems, List<SMTPConfig> smtpServersConfig, CampaignHeaders campaignHeaders, String creative) throws InterruptedException {
-		Assert.isTrue(!CollectionUtils.isEmpty(smtpServersConfig), "cannot start campaign with null or empty smtp servers configd !");
+	private synchronized void sendCampaign(Integer batchSize, Integer intervalBetweenBatchesInSec, Integer mailsToSendBeforeIpRotate, List<DataItemDto> dataItems, List<SMTPConfig> smtpServersConfig, CampaignHeaders campaignHeaders, String creative, Integer testAfter, List<String> testMails) throws InterruptedException {
+		Assert.isTrue(!CollectionUtils.isEmpty(smtpServersConfig), "cannot start campaign with null or empty smtp servers config !");
 		Assert.isTrue(!CollectionUtils.isEmpty(dataItems), "cannot start campaign with null or empty data !");
 		
 		Iterator<SMTPConfig> serversIterator = Iterables.cycle(smtpServersConfig).iterator();
@@ -155,6 +155,8 @@ public class CampaignService {
 		log.info("smtp is gonna rotate every {} e-mail sent. {} emails are going to be sent every {} seconds", mailsToSendBeforeIpRotate, batchSize, intervalBetweenBatchesInSec);
 		for(int index = 1; index <= data.size(); index++) {
 			
+			sendEmail(smtpConfig, campaignHeaders, creative, data.get(index-1));
+
 			if(shouldRotateDomain(mailsToSendBeforeIpRotate, index)) {
 				smtpConfig = serversIterator.next();
 			}
@@ -166,11 +168,34 @@ public class CampaignService {
 				sendStart = Instant.now();
 			}
 			
-			sendEmail(smtpConfig, campaignHeaders, creative, data.get(index-1));
+			if(sendQuotaReachedBeforeSendingTestMails(testAfter, index)) {
+				sendTestMails(smtpConfig, campaignHeaders, creative, testMails);
+				
+			}
+			
 		}
 		log.info("Campaign sent successfully !");
 	}
 
+	private void sendTestMails(SMTPConfig smtpConfig, CampaignHeaders campaignHeaders, String creative,	List<String> testMails) {
+		if(!testMails.isEmpty()) {
+			
+			log.info("Sending test mails ...");
+			for(String testMail : testMails) {
+				sendEmail(smtpConfig, campaignHeaders, creative, testMail);
+			}			
+		}
+		else {
+			log.info("No test mails were sent");
+		}
+	}
+
+	private boolean sendQuotaReachedBeforeSendingTestMails(Integer testAfter, int index) {
+
+		return testAfter != null && testAfter != 0  && index % testAfter == 0;
+	}
+	
+	
 	private void waitIfNeeded(Integer intervalBetweenBatchesInSec, Duration sendDuration) throws InterruptedException {
 		if(intervalBetweenBatchesInSec != 0 && sendLastedLessThanBatchInterval(intervalBetweenBatchesInSec, sendDuration)) {
 			waitTheRemainingTimeToReachBatchInterval(intervalBetweenBatchesInSec, sendDuration);
@@ -185,7 +210,7 @@ public class CampaignService {
 		return batchSize != null && batchSize != 0 && index % batchSize == 0;
 	}
 
-	private void waitTheRemainingTimeToReachBatchInterval(Integer intervalBetweenBatchesInSec, Duration sendDuration)
+	private synchronized void waitTheRemainingTimeToReachBatchInterval(Integer intervalBetweenBatchesInSec, Duration sendDuration)
 			throws InterruptedException {
 		Assert.notNull(intervalBetweenBatchesInSec, "Interval between batches is null, cannot wait !");
 		wait(sendDuration.minusSeconds(intervalBetweenBatchesInSec).abs().toMillis());
