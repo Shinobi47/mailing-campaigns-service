@@ -1,9 +1,9 @@
 package com.benayed.mailing.campaigns.test;
 
-import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
-import javax.mail.Header;
-
+import org.assertj.core.util.Maps;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,13 +25,11 @@ public class DataValidatorTest {
 		dataValidator = new DataValidator();
 
 	}
-		
+	
 	@Test
-	public void should_throw_exception_when_additionnal_Headers_contain_null_header(){
+	public void should_throw_exception_when_campaignHeaders_object_is_null(){
 		//Arrange
-		Header invalidHeader = null;
-		CampaignHeaders campaignHeaders = CampaignHeaders.builder()
-				.additionnalHeaders(Arrays.asList(invalidHeader)).build();
+		CampaignHeaders campaignHeaders = null;
 		//Act
 		Assertions.assertThrows(IllegalArgumentException.class, () -> 
 		dataValidator.validateHeaders(campaignHeaders));
@@ -39,13 +37,13 @@ public class DataValidatorTest {
 		//Assert
 		//=> exception thrown
 	}
-
+	
 	@Test
 	public void should_throw_exception_when_additionnal_Headers_contain_header_with_null_name(){
 		//Arrange
-		Header invalidHeader = new Header(null, "valid");
+		Map<String, String> invalidHeader = Maps.newHashMap(null, "valid");
 		CampaignHeaders campaignHeaders = CampaignHeaders.builder()
-				.additionnalHeaders(Arrays.asList(invalidHeader)).build();
+				.additionnalHeaders(invalidHeader).build();
 		//Act
 		Assertions.assertThrows(IllegalArgumentException.class, () -> 
 		dataValidator.validateHeaders(campaignHeaders));
@@ -58,9 +56,9 @@ public class DataValidatorTest {
 	@Test
 	public void should_throw_exception_when_additionnal_Headers_contain_header_with_null_value(){
 		//Arrange
-		Header invalidHeader = new Header("valid", null);
+		Map<String, String> invalidHeader = Maps.newHashMap("valid", null);
 		CampaignHeaders campaignHeaders = CampaignHeaders.builder()
-				.additionnalHeaders(Arrays.asList(invalidHeader)).build();
+				.additionnalHeaders(invalidHeader).build();
 		//Act
 		Assertions.assertThrows(IllegalArgumentException.class, () -> 
 		dataValidator.validateHeaders(campaignHeaders));
@@ -73,9 +71,9 @@ public class DataValidatorTest {
 	@ValueSource(strings = {";invalid", "invalid;", "inv;alid", ":invalid", "invalid:", "inv:alid"})
 	public void should_throw_exception_when_additionnalHeaders_contain_header_with_value_having_illegal_character(String invalidCharacter){
 		//Arrange
-		Header invalidHeader = new Header("valid", invalidCharacter);
+		Map<String, String> invalidHeader = Map.of("valid", invalidCharacter);
 		CampaignHeaders campaignHeaders = CampaignHeaders.builder()
-				.additionnalHeaders(Arrays.asList(invalidHeader)).build();
+				.additionnalHeaders(invalidHeader).build();
 		//Act
 		Assertions.assertThrows(IllegalArgumentException.class, () -> 
 		dataValidator.validateHeaders(campaignHeaders));
@@ -88,9 +86,9 @@ public class DataValidatorTest {
 	@ValueSource(strings = {";invalid", "invalid;", "inv;alid", ":invalid", "invalid:", "inv:alid"})
 	public void should_throw_exception_when_additionnalHeaders_contain_header_with_name_having_illegal_character(String invalidCharacter){
 		//Arrange
-		Header invalidHeader = new Header(invalidCharacter, "valid");
+		Map<String, String> invalidHeader = Map.of(invalidCharacter, "valid");
 		CampaignHeaders campaignHeaders = CampaignHeaders.builder()
-				.additionnalHeaders(Arrays.asList(invalidHeader)).build();
+				.additionnalHeaders(invalidHeader).build();
 		//Act
 		Assertions.assertThrows(IllegalArgumentException.class, () -> 
 		dataValidator.validateHeaders(campaignHeaders));
@@ -102,9 +100,9 @@ public class DataValidatorTest {
 	@Test
 	public void should_not_throw_exception_when_headers_are_valid(){
 		//Arrange
-		Header invalidHeader = new Header("valid", "valid");
+		Map<String, String> invalidHeader = Map.of("valid", "valid");
 		CampaignHeaders campaignHeaders = CampaignHeaders.builder()
-				.additionnalHeaders(Arrays.asList(invalidHeader)).build();
+				.additionnalHeaders(invalidHeader).build();
 		//Act
 		dataValidator.validateHeaders(campaignHeaders);
 

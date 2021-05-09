@@ -1,12 +1,6 @@
 package com.benayed.mailing.campaigns.dto;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-
-import javax.mail.Header;
-
-import com.fasterxml.jackson.annotation.JsonSetter;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,16 +16,6 @@ public class CampaignHeaders {
     private String bounceAddr;
     private String received;
     
-    private List<Header> additionnalHeaders;
-    
-    
-    @JsonSetter("additionnalHeaders")
-    public void setAdditionnalHeaders(List<Map<String, String>> headers) {
-    	List<Header> additionnalHeaders = new ArrayList<Header>();
-    	
-    	for(Map<String, String> header : headers) {
-    		additionnalHeaders.add(new Header(header.get("name"), header.get("value")));
-    	}    	
-    	this.additionnalHeaders = List.copyOf(additionnalHeaders);
-    }
+    private Map<String, String> additionnalHeaders;
+
 }

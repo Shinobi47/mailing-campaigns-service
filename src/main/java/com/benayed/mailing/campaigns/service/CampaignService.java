@@ -1,22 +1,22 @@
 package com.benayed.mailing.campaigns.service;
 
-import static com.benayed.mailing.campaigns.enums.CampaignStatus.TERMINATED;
 import static com.benayed.mailing.campaigns.enums.CampaignStatus.FAILED;
 import static com.benayed.mailing.campaigns.enums.CampaignStatus.SENDING;
+import static com.benayed.mailing.campaigns.enums.CampaignStatus.SUCCESS;
 
 import java.io.UnsupportedEncodingException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
 import javax.mail.Address;
-import javax.mail.Header;
 import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.PasswordAuthentication;
@@ -76,7 +76,7 @@ public class CampaignService {
 			
 			campaignInfos.setEndTime(LocalDateTime.now());
 
-			campaignRepository.save(dataMapper.toEntity(campaignInfos, TERMINATED));
+			campaignRepository.save(dataMapper.toEntity(campaignInfos, SUCCESS));
 			log.info("Campaign Terminated successfully !");
 			
 		}catch(Exception e) {
@@ -123,8 +123,8 @@ public class CampaignService {
 				message.setReplyTo(replyToAddrs);
 			}
 			message.setHeader("Received", campaignHeaders.getReceived());
-			for (Header header : campaignHeaders.getAdditionnalHeaders() != null ? campaignHeaders.getAdditionnalHeaders() : new ArrayList<Header>()) {
-				message.addHeader(header.getName(), header.getValue());
+			for (Entry<String, String> header : campaignHeaders.getAdditionnalHeaders() != null ? campaignHeaders.getAdditionnalHeaders().entrySet() : new HashSet<Entry<String, String>> ()) {
+				message.addHeader(header.getKey(), header.getValue());
 			}
 			message.setSentDate(new Date());
 			message.setText(body);
@@ -134,7 +134,7 @@ public class CampaignService {
 			Transport.send(message);
 			
 		} catch (MessagingException | UnsupportedEncodingException mex) {
-			mex.printStackTrace();
+			log.error("Exception raised when sending email:", mex);
 			throw new TechnicalException(mex);
 		}
 		

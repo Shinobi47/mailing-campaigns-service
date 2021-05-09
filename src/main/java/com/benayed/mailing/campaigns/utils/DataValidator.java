@@ -2,9 +2,8 @@ package com.benayed.mailing.campaigns.utils;
 
 import static com.benayed.mailing.campaigns.constants.Constants.ILLEGAL_CUSTOM_HEADERS_CHARACTERS;
 
+import java.util.Map;
 import java.util.Objects;
-
-import javax.mail.Header;
 
 import org.springframework.stereotype.Component;
 
@@ -29,17 +28,18 @@ public class DataValidator {
 	}
 
 	private boolean doesHeadersContainNullAdditionnalHeader(CampaignHeaders headers) {
-		return headers.getAdditionnalHeaders().stream().anyMatch(header -> header == null || header.getName() == null || header.getValue() == null);
+		return headers.getAdditionnalHeaders().entrySet().stream().anyMatch(header -> header == null || header.getKey() == null || header.getValue() == null);
 	}
 
 	private boolean anyAdditionnalHeaderContainsIllegalCharacter(CampaignHeaders headers) {
-		return headers.getAdditionnalHeaders().stream()
+		return headers.getAdditionnalHeaders().entrySet().stream()
 		.filter(Objects::nonNull)
 		.anyMatch(this::headerContainsAnIllegalCharacter);
 	}
 
-	private boolean headerContainsAnIllegalCharacter(Header header) {
+	private boolean headerContainsAnIllegalCharacter(Map.Entry<String, String> header) {
 		return ILLEGAL_CUSTOM_HEADERS_CHARACTERS.stream()
-				.anyMatch(illegalCharacter -> header.getName().contains(illegalCharacter) || header.getValue().contains(illegalCharacter));
+				.anyMatch(illegalCharacter -> header.getKey().contains(illegalCharacter) || header.getValue().contains(illegalCharacter));
 	}
+	
 }

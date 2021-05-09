@@ -5,11 +5,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 import javax.mail.Address;
-import javax.mail.Header;
 import javax.mail.Message;
 import javax.mail.MessagingException;
 
@@ -82,7 +83,8 @@ public class CampaignServiceTest {
 		String subject = "Subject1";
 		String replyTo = "ReplyTo@gmail.com";
 		String received = "received";
-		Header additionnalHeader = new Header("headerName", "headerValue");
+		Entry<String, String> additionnalHeader = Map.entry("headerName", "headerValue");
+		
 		
 		String creative = "This is a mail creative";
 
@@ -173,9 +175,9 @@ public class CampaignServiceTest {
 		Assertions.assertThat(messages).hasSize(8);
 		Mockito.verify(campaignRepository, Mockito.times(2)).save(campaignEntityCaptor.capture());
 		CampaignEntity persistedCampaign = campaignEntityCaptor.getValue();
-		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.TERMINATED);
-		Assertions.assertThat(Duration.between(persistedCampaign.getStartTime(), persistedCampaign.getEndTime()).compareTo(Duration.ofSeconds(2*4))).isPositive(); // campaign execution lasts longer than  8 (2*4) seconds.
-																																								   // with batch size 3 and 8 emails and interval between batches 4 seconds, campaign should wait twice (3 mails sent then wait 4s then 3 sent then wait 4s then 2 sent). 
+		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.SUCCESS);
+		Assertions.assertThat(Duration.between(persistedCampaign.getStartTime(), persistedCampaign.getEndTime())).isGreaterThan(Duration.ofSeconds(2*4)); // campaign execution lasts longer than  8 (2*4) seconds.
+																																						  // with batch size 3 and 8 emails and interval between batches 4 seconds, campaign should wait twice (3 mails sent then wait 4s then 3 sent then wait 4s then 2 sent). 
 	}
 	
 	@Test
@@ -267,7 +269,7 @@ public class CampaignServiceTest {
 		Assertions.assertThat(greenMailRotation.getReceivedMessages()).hasSize(2);
 		Mockito.verify(campaignRepository, Mockito.times(2)).save(campaignEntityCaptor.capture());
 		CampaignEntity persistedCampaign = campaignEntityCaptor.getValue();
-		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.TERMINATED);
+		Assertions.assertThat(persistedCampaign.getStatus()).isEqualTo(CampaignStatus.SUCCESS);
 		
 		greenMailRotation.stop();
 	}
@@ -322,7 +324,7 @@ public class CampaignServiceTest {
 	
 
 	private void validateReceivedHeaders(String bounceAddr, String from, String fromName, String subject,
-			String replyTo, String received, Header additionnalHeader,	String recipientEmail, String receivedHeaders) {
+			String replyTo, String received, Entry<String, String> additionnalHeader,	String recipientEmail, String receivedHeaders) {
 		Assertions.assertThat(receivedHeaders).contains("Return-Path: <" + bounceAddr + ">");
 		Assertions.assertThat(receivedHeaders).contains("Received: " + received);
 		Assertions.assertThat(receivedHeaders).contains("Date");
@@ -330,7 +332,7 @@ public class CampaignServiceTest {
 		Assertions.assertThat(receivedHeaders).contains("Reply-To: " + replyTo);
 		Assertions.assertThat(receivedHeaders).contains("To: " + recipientEmail);
 		Assertions.assertThat(receivedHeaders).contains("Subject: " + subject);
-		Assertions.assertThat(receivedHeaders).contains(additionnalHeader.getName() + ": " + additionnalHeader.getValue());
+		Assertions.assertThat(receivedHeaders).contains(additionnalHeader.getKey() + ": " + additionnalHeader.getValue());
 	}
 
 	private MTADto buildMTADto(String mtaName, String dns, String ip, String port, String username, String password) {
@@ -345,7 +347,7 @@ public class CampaignServiceTest {
 	}
 
 	private CampaignHeaders buildCampaignHeaders(String bounceAddr, String from, String fromName, String subject,
-			String replyTo, String received, Header additionnalHeader) {
+			String replyTo, String received, Map.Entry<String, String> additionnalHeader) {
 		return CampaignHeaders.builder()
 				.from(from)
 				.fromName(fromName)
@@ -353,7 +355,7 @@ public class CampaignServiceTest {
 				.replyTo(replyTo) 
 				.bounceAddr(bounceAddr)
 				.received(received)
-				.additionnalHeaders(Arrays.asList(additionnalHeader)).build();
+				.additionnalHeaders(Map.ofEntries(additionnalHeader)).build();
 	}
 	
 	private List<DataItemDto> buildDummyDataListHavingSize(int listSize) {

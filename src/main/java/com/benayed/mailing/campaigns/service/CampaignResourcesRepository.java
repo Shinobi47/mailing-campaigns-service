@@ -41,10 +41,10 @@ public class CampaignResourcesRepository {
 		String dataPath = "/groups/" + groupsIds.stream().map(String::valueOf).collect(Collectors.joining("-")) + "/data";
 
 		String url = UriComponentsBuilder.fromHttpUrl(dataUrl + dataPath)
-				.queryParam("filtered", true) 
-				.queryParam("suppression-id", 1)
-				.queryParam("offset", 1)
-				.queryParam("limit", 1)
+				.queryParam("filtered", isFiltered) 
+				.queryParam("suppression-id", suppressionId)
+				.queryParam("offset", offset)
+				.queryParam("limit", limit)
 				.toUriString();
 		try {
 			List<DataItemDto> data = restTemplate.exchange(url, HttpMethod.GET, null, new ParameterizedTypeReference<List<DataItemDto>>() {}).getBody();

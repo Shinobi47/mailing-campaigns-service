@@ -1,9 +1,8 @@
 package com.benayed.mailing.campaigns.utils;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-
-import javax.mail.Header;
 
 import org.springframework.stereotype.Component;
 
@@ -54,11 +53,11 @@ public class DataMapper {
 			mtasIds.stream().map(String::valueOf).collect(Collectors.joining(";"));
 	}
 
-	private String toJoinedStringHeaders(List<Header> headers) {
+	private String toJoinedStringHeaders(Map<String, String> headers) {
 		return headers == null ? null :
-			headers.stream()
+			headers.entrySet().stream()
 				.filter(Objects::nonNull)
-				.map(header -> header.getName() + ":" + header.getValue())
+				.map(header -> header.getKey() + ":" + header.getValue())
 				.collect(Collectors.joining(";"));
 	}
 }
